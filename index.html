@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kármán — GPU lattice-Boltzmann wind tunnel</title>
+<style>
+  :root {
+    --bg: #06080c;
+    --panel: rgba(13, 16, 22, 0.88);
+    --line: #232a35;
+    --text: #c8d2e0;
+    --dim: #6b7686;
+    --accent: #4cc3ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--bg); }
+  body { font: 13px/1.45 "SF Mono", ui-monospace, Menlo, Consolas, monospace; color: var(--text); }
+  #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+
+  #panel {
+    position: fixed; top: 16px; left: 16px; width: 232px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; backdrop-filter: blur(12px); user-select: none;
+  }
+  #panel h1 { font-size: 15px; letter-spacing: 0.22em; color: #fff; font-weight: 600; }
+  #panel h1 span { color: var(--accent); }
+  #panel .sub { color: var(--dim); font-size: 10.5px; margin: 2px 0 12px; }
+  .row { margin: 9px 0; }
+  .row label { display: block; color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .row .val { float: right; color: var(--text); text-transform: none; }
+  select, button {
+    font: inherit; color: var(--text); background: #11151d; border: 1px solid var(--line);
+    border-radius: 6px; padding: 5px 8px; cursor: pointer; width: 100%;
+  }
+  select:hover, button:hover { border-color: #36404f; }
+  .seg { display: flex; gap: 5px; }
+  .seg button { flex: 1; padding: 5px 0; color: var(--dim); }
+  .seg button.on { color: #fff; border-color: var(--accent); background: rgba(76, 195, 255, 0.08); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .btns { display: flex; gap: 5px; margin-top: 12px; }
+  .keys { margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--line); color: var(--dim); font-size: 10px; }
+  .keys b { color: var(--text); font-weight: 500; }
+
+  #hud {
+    position: fixed; left: 16px; bottom: 14px; color: var(--dim); font-size: 11px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px;
+  }
+  #err {
+    position: fixed; inset: 0; display: none; place-items: center; text-align: center;
+    color: var(--text); padding: 40px; background: var(--bg);
+  }
+  body.hide-ui #panel, body.hide-ui #hud { display: none; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="panel">
+  <h1>KÁRMÁN<span>_</span></h1>
+  <div class="sub">lattice-Boltzmann wind tunnel · GPU</div>
+
+  <div class="row">
+    <label>Scene</label>
+    <select id="preset"></select>
+  </div>
+
+  <div class="row">
+    <label>Field</label>
+    <div class="seg">
+      <button data-mode="0">Dye</button>
+      <button data-mode="1">Vorticity</button>
+      <button data-mode="2">Speed</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Tool</label>
+    <div class="seg">
+      <button data-tool="stir">Stir</button>
+      <button data-tool="draw">Draw</button>
+      <button data-tool="erase">Erase</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label>Inflow <span class="val" id="flowVal"></span></label>
+    <input type="range" id="flow" min="0" max="0.15" step="0.005">
+  </div>
+  <div class="row">
+    <label>Viscosity <span class="val" id="viscVal"></span></label>
+    <input type="range" id="visc" min="0.51" max="0.7" step="0.002">
+  </div>
+  <div class="row">
+    <label>Sim speed <span class="val" id="speedVal"></span></label>
+    <input type="range" id="speed" min="1" max="20" step="1">
+  </div>
+  <div class="row">
+    <label>Grid</label>
+    <select id="quality">
+      <option value="192">Fast (192 rows)</option>
+      <option value="288">Balanced (288 rows)</option>
+      <option value="432">Fine (432 rows)</option>
+    </select>
+  </div>
+
+  <div class="btns">
+    <button id="pause">Pause</button>
+    <button id="reset">Reset</button>
+    <button id="clear">Clear</button>
+  </div>
+
+  <div class="keys">
+    drag <b>stir</b> · shift-drag <b>draw</b> · right-drag <b>erase</b><br>
+    <b>1/2/3</b> field · <b>space</b> pause · <b>r</b> reset · <b>h</b> hide ui
+  </div>
+</div>
+
+<div id="hud">…</div>
+<div id="err"></div>
+
+<script type="module">
+  import('./src/main.js').catch((e) => {
+    const el = document.getElementById('err');
+    el.style.display = 'grid';
+    el.textContent = 'Failed to start: ' + e.message;
+    console.error(e);
+  });
+</script>
+</body>
+</html>
