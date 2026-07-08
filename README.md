@@ -2,32 +2,32 @@
 
 # kármán
 
-**A real-time fluid simulator that runs entirely on your GPU — in a browser tab.**
+**A real-time fluid simulator that runs on your GPU, in a browser tab.**
 
-The Navier–Stokes equations, solved 10× a frame by hand-written WebGL2 shaders.
-Drag your mouse through the fluid. Draw obstacles and watch the flow re-form. Put your own name in the wind tunnel.
+WebGL2 fragment shaders solve the Navier–Stokes equations ten times per frame.
+Drag your mouse through the fluid, or put your own name in the wind tunnel.
 
-<img src="media/hero-tracers.jpg" width="820" alt="16,000 tracer particles revealing the flow around a cylinder — recirculating vortices, gold shear layers, a von Kármán vortex street">
+### [▶ &nbsp;Try it live](https://kratik1.github.io/karman/)
 
-*16,384 GPU tracer particles riding the flow around a cylinder. The recirculation bubble, the spiral vortex cores, the alternating vortex street — none of it is scripted. It's an instability of the Navier–Stokes equations, and the simulation finds it on its own.*
+<img src="media/hero-tracers.jpg" width="820" alt="16,000 tracer particles revealing the flow around a cylinder: recirculating vortices, gold shear layers, a von Kármán vortex street">
+
+*16,384 GPU tracer particles riding the flow around a cylinder. The recirculation bubble, the spiral vortex cores, and the alternating vortex street all emerge from the physics. Nothing here is scripted or pre-rendered.*
 
 </div>
 
 ---
 
-## Run it
+## Run it locally
 
-It's a static page — no build step, no dependencies, no server-side anything.
+The whole app is a static page: `index.html` plus about a thousand lines of JS and GLSL. There is no build step.
 
 ```bash
-git clone <this-repo> && cd karman
+git clone https://github.com/kratik1/karman && cd karman
 npx http-server          # or any static file server
 # open the printed localhost URL
 ```
 
-**Or host it for free:** push to GitHub, then *Settings → Pages → Deploy from branch → main*. The whole thing is `index.html` + ~1000 lines of JS and GLSL, so GitHub Pages serves it as-is.
-
-> Needs WebGL2 with float render targets (`EXT_color_buffer_float`) — every current desktop browser, and most mobile ones.
+> Requires WebGL2 with float render targets (`EXT_color_buffer_float`). Every current desktop browser has this, and most mobile ones do too.
 
 ## The tour
 
@@ -37,29 +37,29 @@ npx http-server          # or any static file server
 <td><img src="media/text-tunnel-trace.jpg" alt="Flow past the word KÁRMÁN"></td>
 </tr>
 <tr>
-<td align="center"><i>Vorticity — blue spins clockwise, orange counter-clockwise</i></td>
-<td align="center"><i>The "Your text" preset: type anything, it becomes the obstacle</i></td>
+<td align="center"><i>Vorticity: blue spins clockwise, orange counter-clockwise</i></td>
+<td align="center"><i>The "Your text" preset. Type anything; it becomes the obstacle.</i></td>
 </tr>
 </table>
 
 | | |
 |---|---|
-| **Drag** | Stir the fluid — inject momentum and dye |
-| **Shift-drag** | Draw a solid obstacle; flow re-forms around it |
+| **Drag** | Stir the fluid: inject momentum and dye |
+| **Shift-drag** | Draw a solid obstacle and the flow re-forms around it |
 | **Right-drag** | Erase obstacles |
 | `1` `2` `3` `4` | Field: dye · vorticity · speed · **tracers** |
 | `[` `]` | Brush size (a ring shows you) |
 | `Space` `R` `C` `H` | Pause · reset flow · clear obstacles · hide UI |
 
-Presets: a cylinder (the classic vortex-street generator), a NACA 0012 airfoil at angle of attack, a slalom of pillars, **your own text**, and an empty sandbox. The viscosity slider sweeps the Reynolds number live — turn it down and the wake goes from a tidy laminar street to a churning turbulent one.
+Presets: a cylinder (the classic vortex-street generator), a NACA 0012 airfoil at angle of attack, a slalom of pillars, your own text, and an empty sandbox. The viscosity slider sweeps the Reynolds number live. Turn it down and the wake goes from a tidy laminar street to a churning turbulent one.
 
-There's also a console API for tinkering: `karman.warp(600)` fast-forwards 600 frames synchronously (how the screenshots in this README were taken), and `karman.sim` hands you the live simulation object.
+You also get a console API for tinkering: `karman.warp(600)` fast-forwards 600 frames synchronously (this is how the screenshots in this README were taken), and `karman.sim` hands you the live simulation object.
 
 ## How it works
 
-This is the **Lattice-Boltzmann Method (LBM)** — a different beast from the finite-difference schemes most people reach for. Instead of discretising the Navier–Stokes equations directly, LBM simulates a fictitious gas of particle *populations* streaming and colliding on a regular lattice. The remarkable part: in the limit of small Mach number, the macroscopic behaviour of this toy gas provably *is* incompressible Navier–Stokes (via the Chapman–Enskog expansion). You get real fluid dynamics out of arithmetic that's almost embarrassingly local and parallel — which is exactly what a GPU wants.
+This is the **Lattice-Boltzmann Method (LBM)**. Instead of discretising the Navier–Stokes equations, LBM simulates a fictitious gas of particle *populations* streaming and colliding on a regular lattice. In the limit of small Mach number, the macroscopic behaviour of this toy gas provably *is* incompressible Navier–Stokes (via the Chapman–Enskog expansion). Every cell update touches only its nearest neighbours, so the algorithm maps onto a GPU with no compromises.
 
-**The D2Q9 lattice.** Each cell holds nine numbers `fᵢ` — the density of particles moving along nine discrete directions (rest, 4 axial, 4 diagonal):
+**The D2Q9 lattice.** Each cell holds nine numbers `fᵢ`: the density of particles moving along nine discrete directions (rest, 4 axial, 4 diagonal):
 
 ```
   6   2   5
@@ -69,7 +69,7 @@ This is the **Lattice-Boltzmann Method (LBM)** — a different beast from the fi
   7   4   8
 ```
 
-Macroscopic density and velocity are just moments of these populations:
+Density and velocity are moments of these populations:
 
 ```
 ρ  = Σ fᵢ
@@ -78,11 +78,11 @@ Macroscopic density and velocity are just moments of these populations:
 
 **Each timestep is two operations:**
 
-1. **Collide** — relax every population toward its local Maxwell–Boltzmann equilibrium with a single relaxation time τ (the BGK approximation):
+1. **Collide.** Relax every population toward its local Maxwell–Boltzmann equilibrium with a single relaxation time τ (the BGK approximation):
    ```
    fᵢ ← fᵢ + (1/τ)(fᵢᵉ𐞥 − fᵢ),   fᵢᵉ𐞥 = wᵢ ρ [1 + 3(eᵢ·u) + 4.5(eᵢ·u)² − 1.5 u·u]
    ```
-2. **Stream** — every population hops to the neighbouring cell in its direction.
+2. **Stream.** Every population hops to the neighbouring cell in its direction.
 
 The kinematic viscosity falls straight out of the relaxation time:
 
@@ -90,25 +90,25 @@ The kinematic viscosity falls straight out of the relaxation time:
 ν = cₛ² (τ − ½),   cₛ² = 1/3
 ```
 
-so the viscosity slider in the UI is literally setting τ, and the Reynolds-number readout is `Re = U·L/ν`.
+The viscosity slider in the UI sets τ, and the HUD computes `Re = U·L/ν` from it.
 
-**Boundaries.** Solid walls and obstacles use **half-way bounce-back**: a population that would stream into a solid cell is reflected back the way it came, which enforces a no-slip condition to second-order accuracy. The inlet is a fixed-velocity (Zou/He-style) condition; the outlet is zero-gradient.
+**Boundaries.** Solid walls and obstacles use half-way bounce-back: a population that would stream into a solid cell reflects back the way it came, which enforces no-slip to second-order accuracy. The inlet holds a fixed velocity (after Zou & He); the outlet copies its upstream neighbour.
 
 ### On the GPU
 
-The entire state lives in floating-point textures. The nine populations are packed across three `RGBA32F` textures, and one collide-and-stream pass per substep ping-pongs between two such triplets using multiple render targets. Streaming is done in *gather* form — each cell pulls from its neighbours — so there's no separate streaming pass and no race conditions.
+The entire state lives in floating-point textures. The nine populations pack into three `RGBA32F` textures, and one collide-and-stream pass per substep ping-pongs between two such triplets using multiple render targets. Streaming happens in gather form, where each cell pulls from its neighbours, so there is no separate streaming pass and no race condition.
 
-The visual layers are all passive passengers on the velocity field:
+The visual layers are passengers on the velocity field:
 
-- **Dye** is a scalar field advected semi-Lagrangianly, injected as streaklines at the inlet.
-- **Tracers** are 16,384 particles whose positions live in a texture; a fragment shader advects them, and they're splatted as additive points into a trail texture that decays exponentially each frame — the digital version of smoke-wire flow visualization. Attribute-less rendering via `gl_VertexID` means zero vertex buffers.
-- **Vorticity** is the curl of velocity, computed by finite differences in the display shader.
+- **Dye**: a scalar field advected semi-Lagrangianly, injected as streaklines at the inlet.
+- **Tracers**: 16,384 particles whose positions live in a texture. A fragment shader advects them; they splat as additive points into a trail buffer that decays each frame. This is the digital version of smoke-wire flow visualization. Rendering uses `gl_VertexID` alone, with zero vertex buffers.
+- **Vorticity**: the curl of velocity, computed by finite differences in the display shader.
 
-At the default grid this is on the order of **10⁷ lattice-site updates per frame** at 60 fps. The live HUD reports the achieved MLUPS (mega-lattice-updates per second).
+At the default grid this works out to roughly 10⁷ lattice-site updates per frame at 60 fps. The HUD reports the achieved MLUPS (mega-lattice-updates per second).
 
 ## Why it looks the way it does
 
-The von Kármán vortex street isn't scripted — it's an *instability*. Above a critical Reynolds number (~47 for a cylinder) the steady wake stops being stable, and the smallest asymmetry blows up into the self-sustaining, alternating shedding you see. The simulation is seeded with a whisper of asymmetry at startup so it doesn't have to wait for numerical noise to break the symmetry, but everything after that is the physics finding its own way.
+Above a critical Reynolds number (about 47 for a cylinder) the steady wake becomes unstable, and the smallest asymmetry grows into the self-sustaining, alternating shedding you see. The simulation seeds a whisper of asymmetry at startup so you don't wait for numerical noise to break the symmetry. After that the equations take over.
 
 ## Project layout
 
@@ -130,11 +130,11 @@ src/
 
 ## References
 
-- T. Krüger et al., *The Lattice Boltzmann Method: Principles and Practice* (Springer, 2017) — the standard modern reference.
-- Q. Zou & X. He, "On pressure and velocity boundary conditions for the lattice Boltzmann BGK model," *Phys. Fluids* **9**, 1591 (1997) — the inlet/outlet boundary conditions.
-- P. Bhatnagar, E. Gross, M. Krook, "A model for collision processes in gases," *Phys. Rev.* **94**, 511 (1954) — the BGK collision operator.
-- M. Van Dyke, *An Album of Fluid Motion* (1982) — the book the tracer mode is trying to look like.
+- T. Krüger et al., *The Lattice Boltzmann Method: Principles and Practice* (Springer, 2017). The standard modern reference.
+- Q. Zou & X. He, "On pressure and velocity boundary conditions for the lattice Boltzmann BGK model," *Phys. Fluids* **9**, 1591 (1997). The inlet/outlet boundary conditions.
+- P. Bhatnagar, E. Gross, M. Krook, "A model for collision processes in gases," *Phys. Rev.* **94**, 511 (1954). The BGK collision operator.
+- M. Van Dyke, *An Album of Fluid Motion* (1982). The book the tracer mode is trying to look like.
 
 ## License
 
-MIT — do whatever you like with it.
+MIT. Do whatever you like with it.
