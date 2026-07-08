@@ -75,8 +75,10 @@ in float vSpeed;
 out vec4 o;
 void main() {
   float t = clamp(vSpeed / max(uInVel * 2.0, 0.02), 0.0, 1.0);
-  vec3 slow = vec3(0.10, 0.38, 1.00);   // deep blue in the calm
-  vec3 fast = vec3(1.00, 0.86, 0.45);   // gold where it rips
+  // trails accumulate PIGMENT (subtracted from paper at display time):
+  // indigo ink in the calm, vermilion where it rips
+  vec3 slow = vec3(0.785, 0.715, 0.390);   // paper - indigo
+  vec3 fast = vec3(0.085, 0.695, 0.810);   // paper - vermilion
   o = vec4(mix(slow, fast, t) * 0.14, 1.0);
 }
 `;

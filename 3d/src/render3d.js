@@ -239,10 +239,13 @@ export class Renderer3D {
       gl.uniform3f(this.streakU.uFast, ...th.fast);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE);
+      // light themes: streaks are ink, subtracted from the paper (dst - src)
+      gl.blendEquation(th.light ? gl.FUNC_REVERSE_SUBTRACT : gl.FUNC_ADD);
       gl.bindVertexArray(this.streakVao);
       // draw a third of the pool — full density reads as noise, not flow
       gl.drawArrays(gl.LINES, 0, Math.floor((PARTICLE_DIM * PARTICLE_DIM) / 3) * 2);
       gl.bindVertexArray(null);
+      gl.blendEquation(gl.FUNC_ADD);
       gl.disable(gl.BLEND);
     }
   }

@@ -9,7 +9,7 @@ const gl = createGL(canvas);
 const quad = makeQuad(gl);
 
 // accent color per render mode — the UI chameleons to match the field
-const ACCENTS = ['#5ac8ff', '#ff9046', '#ffce56', '#8affc1'];
+const ACCENTS = ['#3b5bdb', '#e8590c', '#c2255c', '#0b7285'];
 
 const settings = {
   quality: 288,        // sim grid height in cells
@@ -87,11 +87,13 @@ function paint(x, y, erase) {
 }
 
 function dyeColor(t) {
-  return [
+  // hue-cycling ink: convert an emissive hue to pigment (paper minus color)
+  const c = [
     0.5 + 0.5 * Math.cos(t),
     0.5 + 0.5 * Math.cos(t + 2.094),
     0.5 + 0.5 * Math.cos(t + 4.188),
   ];
+  return [(1 - c[0]) * 0.8, (1 - c[1]) * 0.8, (1 - c[2]) * 0.8];
 }
 
 function updateRing(e) {

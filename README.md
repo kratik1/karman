@@ -9,9 +9,9 @@ Drag your mouse through the fluid, or put your own name in the wind tunnel.
 
 ### [▶ &nbsp;Try it live](https://kratik1.github.io/karman/) &nbsp;·&nbsp; [▶ &nbsp;3D version](https://kratik1.github.io/karman/3d/)
 
-<img src="media/hero-tracers.jpg" width="820" alt="16,000 tracer particles revealing the flow around a cylinder: recirculating vortices, gold shear layers, a von Kármán vortex street">
+<img src="media/hero-tracers.jpg" width="820" alt="16,000 tracer particles drawing the flow around a cylinder in ink: vermilion streamlines, indigo eddies, a von Kármán vortex street">
 
-*16,384 GPU tracer particles riding the flow around a cylinder. The recirculation bubble, the spiral vortex cores, and the alternating vortex street all emerge from the physics. Nothing here is scripted or pre-rendered.*
+*16,384 GPU tracer particles drawing the flow around a cylinder, live. The recirculation bubble, the spiral vortex cores, and the alternating vortex street all emerge from the physics. Nothing here is scripted, pre-rendered, or hand-drawn — it only looks like it came out of a plotter.*
 
 </div>
 
@@ -37,7 +37,7 @@ npx http-server          # or any static file server
 <td><img src="media/text-tunnel-trace.jpg" alt="Flow past the word KÁRMÁN"></td>
 </tr>
 <tr>
-<td align="center"><i>Vorticity: blue spins clockwise, orange counter-clockwise</i></td>
+<td align="center"><i>Vorticity: indigo spins clockwise, vermilion counter-clockwise</i></td>
 <td align="center"><i>The "Your text" preset. Type anything; it becomes the obstacle.</i></td>
 </tr>
 </table>
@@ -54,6 +54,8 @@ npx http-server          # or any static file server
 Presets: a cylinder (the classic vortex-street generator), a NACA 0012 airfoil at angle of attack, a slalom of pillars, your own text, and an empty sandbox. The viscosity slider sweeps the Reynolds number live. Turn it down and the wake goes from a tidy laminar street to a churning turbulent one.
 
 You also get a console API for tinkering: `karman.warp(600)` fast-forwards 600 frames synchronously (this is how the screenshots in this README were taken), and `karman.sim` hands you the live simulation object.
+
+The look is deliberate: everything renders as ink on paper. Dye, tracer trails, and colormaps are stored as pigment and subtracted from the page, the way a wash drawing absorbs light. The 3D version ships four alternate palettes behind `karman.theme('ember' | 'hologram' | 'nightlab' | 'synthwave')` if you prefer your fluids glowing.
 
 ## The 3D wind tunnel
 

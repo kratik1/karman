@@ -35,10 +35,12 @@ export const THEMES = {
   },
   ivory: {
     label: 'Ivory',
+    light: true,                   // streaks blend subtractively (ink, not light)
     accents: ['#3b5bdb', '#e8590c', '#c2255c', '#0b7285'],
     bg0: [0.905, 0.895, 0.870], bg1: [0.985, 0.980, 0.965],
     cold: [0.16, 0.22, 0.52], hot: [0.86, 0.24, 0.10],
-    slow: [0.18, 0.28, 0.58], fast: [0.88, 0.28, 0.10],
+    slow: [0.60, 0.55, 0.33],      // pigment: paper minus indigo
+    fast: [0.09, 0.55, 0.62],      // pigment: paper minus vermilion
     jetA: [0.20, 0.30, 0.62], jetB: [0.80, 0.22, 0.30],
     wire: [0.72, 0.70, 0.66],
     emission: 0.55, absorb: 2.4,   // ink on paper: absorb more, glow less
@@ -55,4 +57,4 @@ export const THEMES = {
   },
 };
 
-export const DEFAULT_THEME = 'nightlab';
+export const DEFAULT_THEME = 'ivory';

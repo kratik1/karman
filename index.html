@@ -7,11 +7,11 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌀</text></svg>">
 <style>
   :root {
-    --accent: #5ac8ff;
-    --bg: #06080c;
-    --text: #d4dce8;
-    --dim: #66707f;
-    --hairline: rgba(255, 255, 255, 0.07);
+    --accent: #3b5bdb;
+    --bg: #edeae2;
+    --text: #262b3a;
+    --dim: #8b8574;
+    --hairline: rgba(35, 30, 20, 0.12);
     --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,11 +27,11 @@
   #panel {
     position: fixed; top: 18px; left: 18px; width: 250px;
     border-radius: 16px;
-    background: linear-gradient(165deg, rgba(19, 23, 32, 0.92), rgba(9, 12, 18, 0.88));
-    backdrop-filter: blur(20px) saturate(1.4);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    background: linear-gradient(165deg, rgba(252, 250, 245, 0.90), rgba(243, 240, 231, 0.86));
+    backdrop-filter: blur(20px) saturate(1.15);
+    -webkit-backdrop-filter: blur(20px) saturate(1.15);
     border: 1px solid var(--hairline);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: 0 16px 44px rgba(60, 50, 28, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.65);
     padding: 15px 16px 14px;
     user-select: none;
     transition: box-shadow 0.3s;
@@ -39,7 +39,7 @@
   #panel header { display: flex; align-items: baseline; justify-content: space-between; }
   #panel h1 {
     font: 600 15px/1 var(--mono);
-    letter-spacing: 0.26em; color: #fff;
+    letter-spacing: 0.26em; color: #1a1e2c;
   }
   #panel h1 .caret { color: var(--accent); animation: blink 1.2s steps(1) infinite; transition: color 0.4s; }
   @keyframes blink { 50% { opacity: 0; } }
@@ -65,7 +65,7 @@
 
   select, input[type=text] {
     font: 500 12px var(--mono); color: var(--text);
-    background: rgba(255, 255, 255, 0.045);
+    background: rgba(35, 30, 20, 0.05);
     border: 1px solid var(--hairline); border-radius: 8px;
     padding: 7px 9px; width: 100%; outline: none;
     transition: border-color 0.15s, background 0.15s;
@@ -74,13 +74,13 @@
   select { background-image: linear-gradient(45deg, transparent 50%, var(--dim) 50%), linear-gradient(135deg, var(--dim) 50%, transparent 50%);
     background-position: calc(100% - 15px) 55%, calc(100% - 10px) 55%;
     background-size: 5px 5px; background-repeat: no-repeat; cursor: pointer; }
-  select:hover, input[type=text]:hover { border-color: rgba(255, 255, 255, 0.16); }
-  select:focus, input[type=text]:focus { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: rgba(255, 255, 255, 0.06); }
+  select:hover, input[type=text]:hover { border-color: rgba(35, 30, 20, 0.28); }
+  select:focus, input[type=text]:focus { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: rgba(35, 30, 20, 0.07); }
 
   /* segmented controls */
   .seg {
     display: flex; gap: 3px; padding: 3px;
-    background: rgba(255, 255, 255, 0.045);
+    background: rgba(35, 30, 20, 0.05);
     border: 1px solid var(--hairline); border-radius: 9px;
   }
   .seg button {
@@ -101,7 +101,7 @@
     -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
     border-radius: 2px; outline: none; cursor: ew-resize;
     background: linear-gradient(to right,
-      var(--accent) var(--fill, 50%), rgba(255, 255, 255, 0.1) var(--fill, 50%));
+      var(--accent) var(--fill, 50%), rgba(35, 30, 20, 0.15) var(--fill, 50%));
     transition: background 0.1s;
   }
   input[type=range]::-webkit-slider-thumb {
@@ -122,7 +122,7 @@
   .btns { display: flex; gap: 6px; margin-top: 14px; }
   .btns button, .btns a {
     flex: 1; font: 500 11.5px/1 inherit; color: var(--text); cursor: pointer;
-    background: rgba(255, 255, 255, 0.045); text-align: center; text-decoration: none;
+    background: rgba(35, 30, 20, 0.05); text-align: center; text-decoration: none;
     border: 1px solid var(--hairline); border-radius: 8px; padding: 7px 0;
     transition: border-color 0.15s, color 0.15s, background 0.15s;
   }
@@ -140,7 +140,7 @@
   }
   .keys kbd {
     font: 500 9.5px var(--mono); color: var(--text);
-    background: rgba(255, 255, 255, 0.07); border: 1px solid var(--hairline);
+    background: rgba(35, 30, 20, 0.07); border: 1px solid var(--hairline);
     border-radius: 4px; padding: 1px 4.5px; margin: 0 1px;
   }
 
@@ -148,7 +148,7 @@
   #hud {
     position: fixed; left: 18px; bottom: 16px;
     color: var(--dim); font: 400 10.5px var(--mono); letter-spacing: 0.02em;
-    background: rgba(10, 13, 19, 0.8);
+    background: rgba(252, 250, 245, 0.85);
     backdrop-filter: blur(12px);
     border: 1px solid var(--hairline); border-radius: 99px;
     padding: 6px 13px;
@@ -172,7 +172,7 @@
     position: fixed; bottom: 20px; left: 50%;
     transform: translate(-50%, 16px);
     color: var(--text); font-size: 12px;
-    background: rgba(12, 15, 22, 0.88);
+    background: rgba(252, 250, 245, 0.92);
     backdrop-filter: blur(16px);
     border: 1px solid var(--hairline); border-radius: 99px;
     padding: 9px 18px; opacity: 0; pointer-events: none;
@@ -182,7 +182,7 @@
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
   #toast kbd {
     font: 500 10px var(--mono); color: var(--accent);
-    background: rgba(255, 255, 255, 0.06); border: 1px solid var(--hairline);
+    background: rgba(35, 30, 20, 0.07); border: 1px solid var(--hairline);
     border-radius: 4px; padding: 1px 5px;
   }
 
