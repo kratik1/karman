@@ -36,6 +36,8 @@ export class LBM3D {
 
     this.tau = 0.512;   // low viscosity: Re past the sphere-wake instability
     this.inVel = 0.08;
+    this.jetA = [0.25, 0.85, 1.0];   // inlet jet palette (theme-controlled)
+    this.jetB = [0.85, 0.40, 1.0];
     this.splat = null;      // {x,y,z, vx,vy,vz, radius}
     this.dyeSplat = null;   // {x,y,z, color:[r,g,b], radius}
   }
@@ -107,7 +109,9 @@ export class LBM3D {
       .tex('uMacro', this.macro)
       .tex('uMask', this.maskTex)
       .f('uDisp', substeps)
-      .f('uInVel', this.inVel);
+      .f('uInVel', this.inVel)
+      .f3('uJetA', ...this.jetA)
+      .f3('uJetB', ...this.jetB);
     const s = this.dyeSplat;
     if (s) {
       p.f3('uSplatPos', s.x, s.y, s.z)

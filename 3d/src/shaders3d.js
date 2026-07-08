@@ -204,6 +204,8 @@ uniform sampler2D uMacro;
 uniform sampler2D uMask;
 uniform float uDisp;
 uniform float uInVel;
+uniform vec3 uJetA;
+uniform vec3 uJetB;
 uniform vec3 uSplatPos;
 uniform vec3 uSplatColor;
 uniform float uSplatRadius;
@@ -228,7 +230,7 @@ void main() {
     jet *= smoothstep(2.0, 6.0, wallDist);
     vec2 cell = floor((pos.yz + per * 0.5) / per);
     float t = fract(cell.x * 0.37 + cell.y * 0.61);
-    vec3 col = mix(vec3(0.25, 0.85, 1.0), vec3(0.85, 0.4, 1.0), t);
+    vec3 col = mix(uJetA, uJetB, t);
     d = max(d, vec4(col * jet, jet));
   }
 

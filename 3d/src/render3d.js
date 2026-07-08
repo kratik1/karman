@@ -101,6 +101,7 @@ export class Renderer3D {
       cold: [0.15, 0.5, 1.0], hot: [1.0, 0.42, 0.08],
       slow: [0.10, 0.38, 1.0], fast: [1.0, 0.86, 0.45],
       wire: [0.16, 0.19, 0.26],
+      emission: 1.0, absorb: 1.0,
     };
 
     this.raymarchPass = new Pass(gl, raymarchFS(sim.common));
@@ -196,7 +197,8 @@ export class Renderer3D {
       .f3('uOrigin', ...this.origin)
       .f('uVoxel', this.voxel)
       .f3('uBg0', ...th.bg0).f3('uBg1', ...th.bg1)
-      .f3('uCold', ...th.cold).f3('uHot', ...th.hot);
+      .f3('uCold', ...th.cold).f3('uHot', ...th.hot)
+      .f('uEmis', th.emission ?? 1).f('uAbsorb', th.absorb ?? 1);
     blitTo(gl, this.quad, this.volume, this.volW, this.volH);
 
     // 2) composite to canvas

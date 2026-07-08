@@ -2,12 +2,24 @@ import { createGL, makeQuad } from '../../src/gl.js';
 import { LBM3D } from './lbm3d.js';
 import { Renderer3D, OrbitCamera } from './render3d.js';
 import { PRESETS3D } from './presets3d.js';
+import { THEMES, DEFAULT_THEME } from './themes.js';
 
 const canvas = document.getElementById('view');
 const gl = createGL(canvas);
 const quad = makeQuad(gl);
 
-const ACCENTS = ['#5ac8ff', '#ff9046', '#ffce56', '#8affc1'];
+let themeName = DEFAULT_THEME;
+const accents = () => THEMES[themeName].accents;
+
+function applyTheme(name) {
+  if (!THEMES[name]) return;
+  themeName = name;
+  const t = THEMES[name];
+  Object.assign(renderer.theme, t);
+  sim.jetA = t.jetA;
+  sim.jetB = t.jetB;
+  document.documentElement.style.setProperty('--accent', t.accents[renderer.mode]);
+}
 
 const settings = {
   quality: 56,          // NY=NZ, NX=2×
@@ -28,6 +40,7 @@ function buildSim() {
   sim.mask.set(PRESETS3D[settings.preset].build(sim.nx, sim.ny, sim.nz, { text: settings.text }));
   sim.uploadMask();
   sim.reset();
+  applyTheme(themeName);
   if (window.__mode !== undefined) setMode(window.__mode);
 }
 
@@ -141,7 +154,7 @@ function initUI() {
     window.__mode = m;
     renderer.mode = m;
     modeButtons.forEach((b) => b.classList.toggle('on', +b.dataset.mode === m));
-    document.documentElement.style.setProperty('--accent', ACCENTS[m]);
+    document.documentElement.style.setProperty('--accent', accents()[m]);
   };
   modeButtons.forEach((b) => (b.onclick = () => setMode(+b.dataset.mode)));
   setMode(0);
@@ -237,6 +250,7 @@ window.karman = {
   },
   cam: camera,
   mode: (m) => setMode(m),
+  theme: (name) => applyTheme(name),
   get sim() { return sim; },
   get renderer() { return renderer; },
 };

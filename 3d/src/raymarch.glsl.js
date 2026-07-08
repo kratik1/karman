@@ -26,6 +26,8 @@ uniform vec3 uBg0;      // background gradient bottom
 uniform vec3 uBg1;      // background gradient top
 uniform vec3 uCold;     // colormap endpoints
 uniform vec3 uHot;
+uniform float uEmis;    // theme emission multiplier
+uniform float uAbsorb;  // theme absorption multiplier
 in vec2 vUv;
 out vec4 outColor;
 
@@ -94,27 +96,27 @@ void main() {
     if (uMode == 0) {
       vec4 d = tri(uDye, vox);
       float dens = d.a * 3.0;
-      acc += T * d.rgb * dens * ds * 3.4;
-      T *= exp(-dens * ds * 0.7);
+      acc += T * d.rgb * dens * ds * 3.4 * uEmis;
+      T *= exp(-dens * ds * 0.7 * uAbsorb);
     } else if (uMode == 1) {
       float wv = tri(uFields, vox).r;
       float s = clamp(wv * 34.0, 0.0, 1.0);
       float dens = s * s * s * 5.0;
       vec3 col = mix(uCold, uHot, s);
-      acc += T * col * dens * ds * 1.7;
-      T *= exp(-dens * ds * 0.65);
+      acc += T * col * dens * ds * 1.7 * uEmis;
+      T *= exp(-dens * ds * 0.65 * uAbsorb);
     } else if (uMode == 2) {
       float sp = tri(uFields, vox).g;
       float s = clamp(sp / max(uInVel * 2.0, 0.02), 0.0, 1.0);
       float dens = s * s * 4.5;
       vec3 col = mix(uCold, uHot, s);
-      acc += T * col * dens * ds * 1.9;
-      T *= exp(-dens * ds * 0.6);
+      acc += T * col * dens * ds * 1.9 * uEmis;
+      T *= exp(-dens * ds * 0.6 * uAbsorb);
     } else {
       float sp = tri(uFields, vox).g;
       float s = clamp(sp / max(uInVel * 2.0, 0.02), 0.0, 1.0);
-      acc += T * mix(uCold, uHot, s) * s * s * ds * 0.06; // faint haze under the streaks
-      T *= exp(-s * ds * 0.03);
+      acc += T * mix(uCold, uHot, s) * s * s * ds * 0.06 * uEmis; // faint haze under the streaks
+      T *= exp(-s * ds * 0.03 * uAbsorb);
     }
     t += ds;
   }
