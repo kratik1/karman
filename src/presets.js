@@ -76,9 +76,40 @@ function sandbox(w, h) {
   return blank(w, h);
 }
 
+// Rasterize arbitrary text into the obstacle mask via an offscreen 2D canvas —
+// put your own name in the wind tunnel.
+function textObstacle(w, h, opts) {
+  const text = (opts && opts.text ? opts.text : 'KÁRMÁN').trim() || 'KÁRMÁN';
+  const m = blank(w, h);
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const font = (s) => `900 ${s}px "Arial Black", "Helvetica Neue", sans-serif`;
+  let size = h * 0.30;
+  ctx.font = font(size);
+  while (ctx.measureText(text).width > w * 0.55 && size > 6) {
+    size *= 0.93;
+    ctx.font = font(size);
+  }
+  ctx.fillStyle = '#fff';
+  ctx.fillText(text, w * 0.42, h * 0.5);
+  const d = ctx.getImageData(0, 0, w, h).data;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      // canvas rows are top-down; the sim's y axis points up
+      if (d[(y * w + x) * 4 + 3] > 128) m[(h - 1 - y) * w + x] = SOLID;
+    }
+  }
+  return m;
+}
+
 export const PRESETS = {
   cylinder: { label: 'Cylinder', build: cylinder },
   airfoil:  { label: 'Airfoil (NACA 0012)', build: airfoil },
   pillars:  { label: 'Pillar slalom', build: pillars },
+  text:     { label: 'Your text…', build: textObstacle },
   sandbox:  { label: 'Empty sandbox', build: sandbox },
 };

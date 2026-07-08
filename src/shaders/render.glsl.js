@@ -54,13 +54,14 @@ void main() {
 `;
 
 // Final composite: pick a field, map it to color, draw obstacles on top.
-// Modes: 0 = dye, 1 = vorticity, 2 = speed.
+// Modes: 0 = dye, 1 = vorticity, 2 = speed, 3 = tracer trails.
 export const DISPLAY_FS = `#version 300 es
 precision highp float;
 ${BILERP}
 uniform sampler2D uDye;
 uniform sampler2D uC;
 uniform sampler2D uMask;
+uniform sampler2D uTrail;
 uniform ivec2 uSize;
 uniform int uMode;
 uniform float uInVel;
@@ -97,9 +98,17 @@ void main() {
     vec3 hot  = vec3(1.0, 0.42, 0.08);   // counter-clockwise
     vec3 cold = vec3(0.15, 0.5, 1.0);    // clockwise
     col = vec3(0.02, 0.025, 0.04) + (s > 0.0 ? hot : cold) * a;
-  } else {
+    col += vec3(1.0, 0.95, 0.85) * pow(abs(s), 6.0) * 0.35; // white-hot cores
+  } else if (uMode == 2) {
     float speed = length(velAt(pos));
     col = inferno(clamp(speed / max(uInVel * 2.2, 0.02), 0.0, 1.0));
+  } else {
+    // tracer trails over a whisper of the speed field; soft tone-map keeps
+    // dense streak clusters from blowing out
+    float speed = length(velAt(pos));
+    vec3 base = inferno(clamp(speed / max(uInVel * 2.2, 0.02), 0.0, 1.0)) * 0.07;
+    vec3 tr = 1.0 - exp(-bilerp(uTrail, pos * 2.0, uSize * 2).rgb * 1.6);
+    col = vec3(0.01, 0.012, 0.02) + base + tr;
   }
 
   // obstacles: smooth-edged slate with a faint rim
@@ -108,6 +117,10 @@ void main() {
   float edge = smoothstep(0.05, 0.45, m) - smoothstep(0.45, 0.95, m);
   col = mix(col, slate, smoothstep(0.3, 0.6, m));
   col += vec3(0.10, 0.11, 0.13) * edge;
+
+  // subtle vignette to seat the frame
+  float vig = smoothstep(1.30, 0.45, length(vUv - 0.5) * 1.55);
+  col *= mix(0.86, 1.0, vig);
 
   o = vec4(pow(col, vec3(0.9)), 1.0); // mild lift for dark displays
 }

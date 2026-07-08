@@ -4,11 +4,12 @@
 
 **A real-time fluid simulator that runs entirely on your GPU — in a browser tab.**
 
-The Navier–Stokes equations, solved 10× a frame by hand-written WebGL2 shaders. Drag your mouse through the fluid and watch vortices peel off in real time.
+The Navier–Stokes equations, solved 10× a frame by hand-written WebGL2 shaders.
+Drag your mouse through the fluid. Draw obstacles and watch the flow re-form. Put your own name in the wind tunnel.
 
-<img src="media/hero-vortex-street.jpg" width="640" alt="A von Kármán vortex street shed by a cylinder, rendered as a vorticity field">
+<img src="media/hero-tracers.jpg" width="820" alt="16,000 tracer particles revealing the flow around a cylinder — recirculating vortices, gold shear layers, a von Kármán vortex street">
 
-*A von Kármán vortex street: alternating clockwise (blue) and counter-clockwise (orange) vortices shed by a cylinder in cross-flow. This image is a live frame, not a pre-render.*
+*16,384 GPU tracer particles riding the flow around a cylinder. The recirculation bubble, the spiral vortex cores, the alternating vortex street — none of it is scripted. It's an instability of the Navier–Stokes equations, and the simulation finds it on its own.*
 
 </div>
 
@@ -20,25 +21,39 @@ It's a static page — no build step, no dependencies, no server-side anything.
 
 ```bash
 git clone <this-repo> && cd karman
-npx http-server          # or: python3 -m http.server
+npx http-server          # or any static file server
 # open the printed localhost URL
 ```
 
-**Or host it for free:** push to GitHub, then *Settings → Pages → Deploy from branch → main*. The whole thing is `index.html` + a few hundred lines of JS and GLSL, so GitHub Pages serves it as-is.
+**Or host it for free:** push to GitHub, then *Settings → Pages → Deploy from branch → main*. The whole thing is `index.html` + ~1000 lines of JS and GLSL, so GitHub Pages serves it as-is.
 
-> Needs a WebGL2 context with float render targets (`EXT_color_buffer_float`) — every current desktop browser, and most mobile ones.
+> Needs WebGL2 with float render targets (`EXT_color_buffer_float`) — every current desktop browser, and most mobile ones.
 
-## Controls
+## The tour
+
+<table>
+<tr>
+<td><img src="media/vortex-street.jpg" alt="Vorticity field"></td>
+<td><img src="media/text-tunnel-trace.jpg" alt="Flow past the word KÁRMÁN"></td>
+</tr>
+<tr>
+<td align="center"><i>Vorticity — blue spins clockwise, orange counter-clockwise</i></td>
+<td align="center"><i>The "Your text" preset: type anything, it becomes the obstacle</i></td>
+</tr>
+</table>
 
 | | |
 |---|---|
 | **Drag** | Stir the fluid — inject momentum and dye |
 | **Shift-drag** | Draw a solid obstacle; flow re-forms around it |
 | **Right-drag** | Erase obstacles |
-| `1` `2` `3` | Switch field: dye · vorticity · speed |
-| `Space` | Pause · `R` reset · `H` hide UI |
+| `1` `2` `3` `4` | Field: dye · vorticity · speed · **tracers** |
+| `[` `]` | Brush size (a ring shows you) |
+| `Space` `R` `C` `H` | Pause · reset flow · clear obstacles · hide UI |
 
-Presets in the panel: a cylinder (the classic vortex-street generator), a NACA 0012 airfoil at angle of attack, a slalom of pillars, and an empty sandbox. The viscosity slider sweeps the Reynolds number live — turn it down and the wake goes from a tidy laminar street to a chaotic turbulent one.
+Presets: a cylinder (the classic vortex-street generator), a NACA 0012 airfoil at angle of attack, a slalom of pillars, **your own text**, and an empty sandbox. The viscosity slider sweeps the Reynolds number live — turn it down and the wake goes from a tidy laminar street to a churning turbulent one.
+
+There's also a console API for tinkering: `karman.warp(600)` fast-forwards 600 frames synchronously (how the screenshots in this README were taken), and `karman.sim` hands you the live simulation object.
 
 ## How it works
 
@@ -81,9 +96,15 @@ so the viscosity slider in the UI is literally setting τ, and the Reynolds-numb
 
 ### On the GPU
 
-The entire state lives in floating-point textures. The nine populations are packed across three `RGBA32F` textures, and one collide-and-stream pass per substep ping-pongs between two such triplets using multiple render targets. Streaming is done in *gather* form — each cell pulls from its neighbours — so there's no separate streaming pass and no race conditions. The dye you see is a passive scalar advected semi-Lagrangianly by the velocity field; vorticity is computed on the fly as the curl of velocity in the display shader.
+The entire state lives in floating-point textures. The nine populations are packed across three `RGBA32F` textures, and one collide-and-stream pass per substep ping-pongs between two such triplets using multiple render targets. Streaming is done in *gather* form — each cell pulls from its neighbours — so there's no separate streaming pass and no race conditions.
 
-At the default grid this is on the order of **10⁷ lattice-site updates per frame** at 60 fps — the kind of throughput that's only sane because every cell's update is independent. The live HUD reports the achieved MLUPS (mega-lattice-updates per second).
+The visual layers are all passive passengers on the velocity field:
+
+- **Dye** is a scalar field advected semi-Lagrangianly, injected as streaklines at the inlet.
+- **Tracers** are 16,384 particles whose positions live in a texture; a fragment shader advects them, and they're splatted as additive points into a trail texture that decays exponentially each frame — the digital version of smoke-wire flow visualization. Attribute-less rendering via `gl_VertexID` means zero vertex buffers.
+- **Vorticity** is the curl of velocity, computed by finite differences in the display shader.
+
+At the default grid this is on the order of **10⁷ lattice-site updates per frame** at 60 fps. The live HUD reports the achieved MLUPS (mega-lattice-updates per second).
 
 ## Why it looks the way it does
 
@@ -92,17 +113,19 @@ The von Kármán vortex street isn't scripted — it's an *instability*. Above a
 ## Project layout
 
 ```
-index.html              page shell + control panel
+index.html                page shell + control panel
 src/
-  gl.js                 WebGL2 helpers: shaders, float textures, MRT framebuffers
-  lbm.js                simulation state + per-frame pass orchestration
-  render.js             dye advection + final compositing
-  presets.js            obstacle masks (cylinder, NACA airfoil, pillars)
-  main.js               app loop, pointer input, UI
+  gl.js                   WebGL2 helpers: shaders, float textures, MRT framebuffers
+  lbm.js                  simulation state + per-frame pass orchestration
+  render.js               dye advection + final compositing
+  particles.js            GPU tracer particles + fading trail buffer
+  presets.js              obstacle masks (cylinder, NACA airfoil, pillars, text)
+  main.js                 app loop, pointer input, UI
   shaders/
-    common.glsl.js       D2Q9 lattice constants + equilibrium
-    sim.glsl.js          init / BGK collision / streaming + boundaries
-    render.glsl.js       dye advection + colormaps (vorticity, speed, dye)
+    common.glsl.js        D2Q9 lattice constants + equilibrium
+    sim.glsl.js           init / BGK collision / streaming + boundaries
+    render.glsl.js        dye advection + colormaps (vorticity, speed, dye, trails)
+    particles.glsl.js     particle advection + point splatting + trail decay
 ```
 
 ## References
@@ -110,6 +133,7 @@ src/
 - T. Krüger et al., *The Lattice Boltzmann Method: Principles and Practice* (Springer, 2017) — the standard modern reference.
 - Q. Zou & X. He, "On pressure and velocity boundary conditions for the lattice Boltzmann BGK model," *Phys. Fluids* **9**, 1591 (1997) — the inlet/outlet boundary conditions.
 - P. Bhatnagar, E. Gross, M. Krook, "A model for collision processes in gases," *Phys. Rev.* **94**, 511 (1954) — the BGK collision operator.
+- M. Van Dyke, *An Album of Fluid Motion* (1982) — the book the tracer mode is trying to look like.
 
 ## License
 

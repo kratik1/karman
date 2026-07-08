@@ -3,7 +3,7 @@
 import { Pass, makeTexture, makeFBO, blitTo } from './gl.js';
 import { ADVECT_FS, DISPLAY_FS } from './shaders/render.glsl.js';
 
-export const MODES = { DYE: 0, VORTICITY: 1, SPEED: 2 };
+export const MODES = { DYE: 0, VORTICITY: 1, SPEED: 2, TRACE: 3 };
 
 export class Renderer {
   constructor(gl, quad, width, height) {
@@ -54,12 +54,13 @@ export class Renderer {
     this.dyeSplat = null;
   }
 
-  draw(sim, canvasW, canvasH) {
+  draw(sim, trailTex, canvasW, canvasH) {
     const gl = this.gl;
     const p = this.displayPass.use()
       .tex('uDye', this.dye.textures[0])
       .tex('uC', sim.fieldTex)
       .tex('uMask', sim.maskTex)
+      .tex('uTrail', trailTex)
       .i('uMode', this.mode)
       .f('uInVel', sim.inVel);
     gl.uniform2i(p.uniforms.uSize, this.w, this.h);
