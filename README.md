@@ -7,7 +7,7 @@
 WebGL2 fragment shaders solve the Navier–Stokes equations ten times per frame.
 Drag your mouse through the fluid, or put your own name in the wind tunnel.
 
-### [▶ &nbsp;Try it live](https://kratik1.github.io/karman/)
+### [▶ &nbsp;Try it live](https://kratik1.github.io/karman/) &nbsp;·&nbsp; [▶ &nbsp;3D version](https://kratik1.github.io/karman/3d/)
 
 <img src="media/hero-tracers.jpg" width="820" alt="16,000 tracer particles revealing the flow around a cylinder: recirculating vortices, gold shear layers, a von Kármán vortex street">
 
@@ -54,6 +54,25 @@ npx http-server          # or any static file server
 Presets: a cylinder (the classic vortex-street generator), a NACA 0012 airfoil at angle of attack, a slalom of pillars, your own text, and an empty sandbox. The viscosity slider sweeps the Reynolds number live. Turn it down and the wake goes from a tidy laminar street to a churning turbulent one.
 
 You also get a console API for tinkering: `karman.warp(600)` fast-forwards 600 frames synchronously (this is how the screenshots in this README were taken), and `karman.sim` hands you the live simulation object.
+
+## The 3D wind tunnel
+
+[**karman/3d**](https://kratik1.github.io/karman/3d/) runs the same physics in full 3D: a **D3Q19** lattice (19 velocity directions per cell instead of 9) over a 112×56×56 volume, rendered by ray-marching the smoke and vorticity fields. Drag to orbit, scroll to zoom, right-drag to pan. There is no three.js and no build step here either; the camera, matrices, and volume renderer are hand-rolled.
+
+<table>
+<tr>
+<td><img src="media/3d-vorticity.jpg" alt="3D vorticity: sphere with glowing separation ring and vortex tails"></td>
+<td><img src="media/3d-smoke.jpg" alt="3D smoke filaments bending around a sphere"></td>
+</tr>
+<tr>
+<td align="center"><i>Vorticity magnitude around a sphere at Re ≈ 380</i></td>
+<td align="center"><i>Smoke filaments threading the wake</i></td>
+</tr>
+</table>
+
+WebGL2 has no compute shaders and no 3D render targets, so the volume lives as Z-slices tiled into big 2D atlases ("flat 3D textures"). The 19 populations pack into five RGBA32F atlases updated by fragment-shader passes, exactly like the 2D solver but with more plumbing. One catch worth knowing: when a framebuffer has six render targets, every fragment shader that draws into it must write all six outputs, or some drivers silently drop the draw.
+
+The full frame — 4 LBM substeps over 351k cells, dye advection, curl computation, 25k tracer particles, and an 80-step volumetric raymarch — runs at 60fps+ on an ordinary laptop GPU.
 
 ## How it works
 
@@ -126,6 +145,15 @@ src/
     sim.glsl.js           init / BGK collision / streaming + boundaries
     render.glsl.js        dye advection + colormaps (vorticity, speed, dye, trails)
     particles.glsl.js     particle advection + point splatting + trail decay
+3d/
+  index.html              3D page shell + control panel
+  src/
+    shaders3d.js          D3Q19 lattice, collide/stream, dye, fields, streaks
+    raymarch.glsl.js      volumetric raymarcher + composite + wire box
+    lbm3d.js              3D sim orchestration over flat-3D atlases
+    render3d.js           orbit camera, mat4 math, volume + particle draw
+    presets3d.js          3D masks (sphere, pole, ball cluster, extruded text)
+    main.js               3D app loop, camera input, UI
 ```
 
 ## References
