@@ -22,7 +22,7 @@ function applyTheme(name) {
 }
 
 const settings = {
-  quality: 56,          // NY=NZ, NX=2×
+  quality: 64,          // NY=NZ, NX=2×
   preset: 'sphere',
   substeps: 4,
   tool: 'orbit',        // orbit | stir
@@ -174,7 +174,7 @@ function initUI() {
     el.oninput = () => { set(+el.value); lab.textContent = fmt(+el.value); fill(+el.value); };
   }
   bindSlider('flow', () => sim.inVel, (v) => { sim.inVel = v; }, (v) => v.toFixed(2), 0, 0.12);
-  bindSlider('visc', () => sim.tau, (v) => { sim.tau = v; }, (v) => `τ ${v.toFixed(3)}`, 0.505, 0.62);
+  bindSlider('visc', () => sim.tau, (v) => { sim.tau = v; }, (v) => `τ ${v.toFixed(4)}`, 0.5005, 0.56);
   bindSlider('speed', () => settings.substeps, (v) => { settings.substeps = v; }, (v) => `${v}×`, 1, 8);
 
   const qualitySel = $('quality');

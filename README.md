@@ -59,7 +59,7 @@ The look is deliberate: everything renders as ink on paper. Dye, tracer trails, 
 
 ## The 3D wind tunnel
 
-[**karman/3d**](https://kratik1.github.io/karman/3d/) runs the same physics in full 3D: a **D3Q19** lattice (19 velocity directions per cell instead of 9) over a 112×56×56 volume, rendered by ray-marching the smoke and vorticity fields. Drag to orbit, scroll to zoom, right-drag to pan. There is no three.js and no build step here either; the camera, matrices, and volume renderer are hand-rolled.
+[**karman/3d**](https://kratik1.github.io/karman/3d/) runs full 3D physics with a more serious solver than the 2D page: a **D3Q19** lattice (19 velocity directions per cell) over a 128×64×64 volume, with **two-relaxation-time (TRT) collision** and a **Smagorinsky large-eddy subgrid model**. The LES carries stability at molecular viscosities the plain BGK scheme could never survive, so the sphere wake is properly turbulent at Re ≈ 2,000 and the solver stays stable past Re ≈ 10,000 at the viscosity slider's minimum. Free-slip side walls keep the channel clean, a sponge layer absorbs vortices before the outlet, and a gentle time-varying inlet sway keeps the wake from relaminarizing. Drag to orbit, scroll to zoom, right-drag to pan. There is no three.js and no build step here either; the camera, matrices, and volume renderer are hand-rolled.
 
 <table>
 <tr>
@@ -67,14 +67,14 @@ The look is deliberate: everything renders as ink on paper. Dye, tracer trails, 
 <td><img src="media/3d-smoke.jpg" alt="3D smoke filaments bending around a sphere"></td>
 </tr>
 <tr>
-<td align="center"><i>Vorticity magnitude around a sphere at Re ≈ 380</i></td>
-<td align="center"><i>Smoke filaments threading the wake</i></td>
+<td align="center"><i>Turbulent vortex tubes behind a sphere at Re ≈ 2,000</i></td>
+<td align="center"><i>Ink filaments threading the turbulent wake</i></td>
 </tr>
 </table>
 
 WebGL2 has no compute shaders and no 3D render targets, so the volume lives as Z-slices tiled into big 2D atlases ("flat 3D textures"). The 19 populations pack into five RGBA32F atlases updated by fragment-shader passes, exactly like the 2D solver but with more plumbing. One catch worth knowing: when a framebuffer has six render targets, every fragment shader that draws into it must write all six outputs, or some drivers silently drop the draw.
 
-The full frame — 4 LBM substeps over 351k cells, dye advection, curl computation, 25k tracer particles, and an 80-step volumetric raymarch — runs at 60fps+ on an ordinary laptop GPU.
+The full frame — 4 TRT+LES substeps over 524k cells, dye advection, curl computation, 25k tracer particles, and an 80-step volumetric raymarch — runs at about 60fps on an ordinary laptop GPU.
 
 ## How it works
 

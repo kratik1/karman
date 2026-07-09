@@ -34,8 +34,11 @@ export class LBM3D {
     this.mask = new Uint8Array(nx * ny * nz);
     this.maskTex = makeTexture(gl, this.aw, this.ah, gl.R8);
 
-    this.tau = 0.512;   // low viscosity: Re past the sphere-wake instability
-    this.inVel = 0.08;
+    // Low molecular viscosity (nu~0.001) for Re~2000; the Smagorinsky LES in
+    // collide carries subgrid stability at these grids.
+    this.tau = 0.503;
+    this.inVel = 0.09;
+    this.stepCount = 0;   // lattice steps, fed to the inlet forcing as uTime
     this.jetA = [0.25, 0.85, 1.0];   // inlet jet palette (theme-controlled)
     this.jetB = [0.85, 0.40, 1.0];
     this.splat = null;      // {x,y,z, vx,vy,vz, radius}
@@ -62,6 +65,7 @@ export class LBM3D {
 
   reset() {
     const gl = this.gl;
+    this.stepCount = 0;
     this.initPass.use().tex('uMask', this.maskTex).f('uInVel', this.inVel);
     blitTo(gl, this.quad, this.state, this.aw, this.ah);
     for (const t of [this.dye, this.dye2]) {
@@ -91,8 +95,12 @@ export class LBM3D {
     }
     blitTo(gl, this.quad, this.scratch, this.aw, this.ah);
 
-    this._bindF(this.streamPass.use(), this.scratch.textures).f('uInVel', this.inVel);
+    this._bindF(this.streamPass.use(), this.scratch.textures)
+      .f('uInVel', this.inVel)
+      .f('uTime', this.stepCount);
     blitTo(gl, this.quad, this.state, this.aw, this.ah);
+
+    this.stepCount = (this.stepCount + 1) % 100000;   // avoid float32 blowup
   }
 
   advance(n) {

@@ -26,6 +26,11 @@ const float W[19] = float[19](
   1.0/36.0, 1.0/36.0, 1.0/36.0, 1.0/36.0
 );
 const int OPP[19] = int[19](0, 2,1, 4,3, 6,5, 8,7, 10,9, 12,11, 14,13, 16,15, 18,17);
+// Specular-reflection index tables for free-slip side walls: MIR_Y[i] is the
+// direction whose velocity equals E[i] with e_y negated (e_x,e_z kept), MIR_Z
+// mirrors e_z. Used to reflect populations off the y/z walls with no shear.
+const int MIR_Y[19] = int[19](0, 1,2, 4,3, 5,6, 9,10,7,8, 11,12,13,14, 18,17,16,15);
+const int MIR_Z[19] = int[19](0, 1,2, 3,4, 6,5, 7,8,9,10, 13,14,11,12, 17,18,15,16);
 
 // voxel <-> atlas mapping
 ivec2 A(ivec3 p) { return ivec2((p.z % TX) * NX + p.x, (p.z / TX) * NY + p.y); }
@@ -117,6 +122,21 @@ void main() {
 }`;
 }
 
+// TRT collision with a Smagorinsky LES eddy viscosity and a sponge outlet.
+//
+// TRT splits each population pair into symmetric/antisymmetric parts and
+// relaxes them at two rates: omega+ (=1/tau_eff) sets the viscosity, omega-
+// is fixed by the magic parameter Lambda=1/4 so the wall placement of the
+// bounce-back is viscosity-independent. When omega+ == omega- this reduces
+// exactly to BGK.
+//
+// LES: the non-equilibrium momentum flux tensor Pi_ab = sum_i e_ia e_ib
+// (f_i - feq_i) gives a local strain-rate magnitude Q = sqrt(2 Pi:Pi). The
+// eddy viscosity is folded into tau via the Hou et al. closure:
+//   tau_eff = 0.5 (tau0 + sqrt(tau0^2 + 18*sqrt(2)*Csm^2*Q/rho))
+// Prefactor convention: nu_t = (Csm*Delta)^2 * S with Delta=1 (one lattice
+// unit) and S recovered from Q; the 18*sqrt(2) collects the D3Q19 cs^2=1/3
+// factors so nu_t adds directly to nu=(tau-0.5)/3. Csm=0.16.
 export function collideFS(common) {
   return `#version 300 es
 precision highp float;
@@ -126,6 +146,8 @@ uniform float uTau;
 uniform vec3 uSplatPos;
 uniform vec3 uSplatVel;
 uniform float uSplatRadius;
+const float CSM = 0.16;   // Smagorinsky constant
+const int SPONGE = 10;    // cells before the outlet where tau is ramped up
 void main() {
   ivec3 p = V(ivec2(gl_FragCoord.xy));
   float f[19];
@@ -140,8 +162,54 @@ void main() {
   float s = length(u);
   if (s > 0.22) u *= 0.22 / s; // stay far below the lattice speed of sound
 
-  float omega = 1.0 / uTau;
-  for (int i = 0; i < 19; i++) f[i] += omega * (feq(i, rho, u) - f[i]);
+  // equilibrium and non-equilibrium parts (feq reused for LES + TRT)
+  float fe[19];
+  for (int i = 0; i < 19; i++) fe[i] = feq(i, rho, u);
+
+  // Smagorinsky: strain magnitude from the non-equilibrium stress tensor.
+  // Pi is symmetric, so only 6 unique components are accumulated.
+  float Pxx=0.0, Pyy=0.0, Pzz=0.0, Pxy=0.0, Pxz=0.0, Pyz=0.0;
+  for (int i = 0; i < 19; i++) {
+    float neq = f[i] - fe[i];
+    vec3 e = vec3(E[i]);
+    Pxx += e.x*e.x*neq; Pyy += e.y*e.y*neq; Pzz += e.z*e.z*neq;
+    Pxy += e.x*e.y*neq; Pxz += e.x*e.z*neq; Pyz += e.y*e.z*neq;
+  }
+  float PiPi = Pxx*Pxx + Pyy*Pyy + Pzz*Pzz + 2.0*(Pxy*Pxy + Pxz*Pxz + Pyz*Pyz);
+  float Q = sqrt(2.0 * PiPi);
+  float tau0 = uTau;
+  float tauEff = 0.5 * (tau0 + sqrt(tau0*tau0 + 18.0*1.41421356*CSM*CSM*Q/max(rho,1e-6)));
+
+  // Sponge zone: smoothly ramp tau up to ~4x in the last SPONGE cells so
+  // vortices are damped before hitting the crude outlet copy (no reflection).
+  float spEnter = float(NX - SPONGE);
+  float sp = smoothstep(spEnter, float(NX - 1), float(p.x));
+  tauEff *= 1.0 + 3.0 * sp;
+  // small inlet buffer: the imposed equilibrium at x=0 lacks a non-equilibrium
+  // part, which rings at tau near 1/2; a touch of extra viscosity damps the
+  // ringing before it advects into the domain as vorticity noise
+  tauEff *= 1.0 + 2.0 * smoothstep(12.0, 0.0, float(p.x));
+
+  // TRT relaxation rates. Lambda=1/4 magic parameter.
+  float omegaP = 1.0 / tauEff;
+  float omegaM = 1.0 / (0.5 + 0.25 / (1.0/omegaP - 0.5));
+
+  // Rest population (i=0) is purely symmetric.
+  f[0] -= omegaP * (f[0] - fe[0]);
+  // Relax each opposite pair once using shared f+/f-. In this E ordering the
+  // odd indices 1,3,5,..,17 are exactly one representative per pair
+  // (OPP[odd]=odd+1), so step by 2 to visit each pair once.
+  for (int i = 1; i < 19; i += 2) {
+    int j = OPP[i];
+    float fp = 0.5 * (f[i] + f[j]);
+    float fm = 0.5 * (f[i] - f[j]);
+    float fep = 0.5 * (fe[i] + fe[j]);
+    float fem = 0.5 * (fe[i] - fe[j]);
+    float relP = omegaP * (fp - fep);
+    float relM = omegaM * (fm - fem);
+    f[i] -= relP + relM;   // f- and fe- flip sign for the opposite direction
+    f[j] -= relP - relM;
+  }
   storeF(f, rho, u);
 }`;
 }
@@ -152,6 +220,7 @@ precision highp float;
 ${common}
 ${SIM_IO}
 uniform float uInVel;
+uniform float uTime;   // lattice-step counter (mod 100000) for inlet forcing
 
 float fetchF(int i, ivec3 p) {
   ivec2 a = A(p);
@@ -166,22 +235,40 @@ void main() {
   ivec3 p = V(ivec2(gl_FragCoord.xy));
   float solid = texelFetch(uMask, A(p), 0).r;
 
+  // Time-varying inlet velocity: a gentle, long-wavelength transverse sway
+  // windowed to the core of the inlet. Long wavelengths keep the injected
+  // vorticity (~amplitude x wavenumber) low, so the freestream stays clean
+  // while the wake still receives enough disturbance to stay turbulent.
+  // wake instability so the flow never relaminarizes to a steady state.
+  vec3 uIn = vec3(uInVel, 0.0, 0.0);
+  vec2 c = (vec2(p.yz) - 0.5 * vec2(float(NY), float(NZ))) / float(NY);
+  float win = exp(-dot(c, c) / 0.18);
+  uIn.y += uInVel * 0.02 * win * sin(0.013 * uTime + 2.6 * c.y + 4.0 * c.x);
+  uIn.z += uInVel * 0.02 * win * cos(0.011 * uTime + 2.2 * c.x - 3.1 * c.y);
+
   float f[19];
   for (int i = 0; i < 19; i++) {
     ivec3 src = p - E[i];
     if (src.x < 0) {
-      f[i] = feq(i, 1.0, vec3(uInVel, 0.0, 0.0));       // inlet
+      f[i] = feq(i, 1.0, uIn);                           // inlet
     } else if (src.x >= NX) {
       src.x = NX - 1;                                    // crude outflow
       src.yz = clamp(src.yz, ivec2(0), ivec2(NY - 1, NZ - 1));
       f[i] = fetchF(i, src);
     } else {
-      src.y = clamp(src.y, 0, NY - 1);
-      src.z = clamp(src.z, 0, NZ - 1);
+      // Free-slip (specular) side walls: if the streaming source falls
+      // outside a y/z wall, mirror the source position back inside and fetch
+      // the direction whose normal velocity component is flipped. This adds
+      // no shear at the wall, so no spurious boundary layer grows.
+      bool outY = src.y < 0 || src.y >= NY;
+      bool outZ = src.z < 0 || src.z >= NZ;
+      int dir = i;
+      if (outY) { src.y = src.y < 0 ? -src.y - 1 : 2*NY - 1 - src.y; dir = MIR_Y[dir]; }
+      if (outZ) { src.z = src.z < 0 ? -src.z - 1 : 2*NZ - 1 - src.z; dir = MIR_Z[dir]; }
       if (texelFetch(uMask, A(src), 0).r > 0.5) {
         f[i] = fetchF(OPP[i], p);                        // half-way bounce-back
       } else {
-        f[i] = fetchF(i, src);
+        f[i] = fetchF(dir, src);
       }
     }
   }
@@ -262,6 +349,9 @@ vec3 velAt(ivec3 p) {
 void main() {
   ivec3 p = V(ivec2(gl_FragCoord.xy));
   if (p.z >= NZ) { o = vec4(0.0); return; }
+  // the first cells at the inlet carry imposed-equilibrium ringing; keep them
+  // out of the displayed fields
+  if (p.x < 12) { o = vec4(0.0, length(velAt(p)), 0.0, 0.0); return; }
   vec3 dx = velAt(p + ivec3(1,0,0)) - velAt(p - ivec3(1,0,0));
   vec3 dy = velAt(p + ivec3(0,1,0)) - velAt(p - ivec3(0,1,0));
   vec3 dz = velAt(p + ivec3(0,0,1)) - velAt(p - ivec3(0,0,1));

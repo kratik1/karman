@@ -100,7 +100,8 @@ void main() {
       T *= exp(-dens * ds * 0.7 * uAbsorb);
     } else if (uMode == 1) {
       float wv = tri(uFields, vox).r;
-      float s = clamp(wv * 34.0, 0.0, 1.0);
+      // subtract a small noise floor so numerical freestream jitter stays invisible
+      float s = clamp((wv - 0.009) * 38.0, 0.0, 1.0);
       float dens = s * s * s * 5.0;
       vec3 col = mix(uCold, uHot, s);
       acc += T * col * dens * ds * 1.7 * uEmis;
