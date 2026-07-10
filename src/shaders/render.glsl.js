@@ -68,7 +68,8 @@ void main() {
 }`;
 
 // Final composite: pick a field, lay its pigment on the paper, draw
-// obstacles on top. Modes: 0 = dye, 1 = vorticity, 2 = speed, 3 = tracers.
+// obstacles on top. Modes: 0 = dye, 1 = vorticity, 2 = speed, 3 = tracers,
+// 4 = numerical schlieren.
 export const DISPLAY_FS = `#version 300 es
 precision highp float;
 ${BILERP}
@@ -84,12 +85,24 @@ in vec2 vUv;
 out vec4 o;
 
 vec2 velAt(vec2 pos) { return bilerp(uC, pos, uSize).zw; }
+float rhoAt(vec2 pos) { return bilerp(uC, pos, uSize).y; }
 
 void main() {
   vec2 pos = vUv * vec2(uSize);
   vec3 col;
 
-  if (uMode == 0) {
+  if (uMode == 4) {
+    // Numerical schlieren: |grad rho| via central differences, rendered as
+    // knife-edge ink on paper (monochrome). rho lives in texC.y.
+    float gx = (rhoAt(pos + vec2(1, 0)) - rhoAt(pos - vec2(1, 0))) * 0.5;
+    float gy = (rhoAt(pos + vec2(0, 1)) - rhoAt(pos - vec2(0, 1))) * 0.5;
+    float g = length(vec2(gx, gy));
+    g = max(g - 0.00015, 0.0);           // tiny noise-floor subtraction
+    // soft tone-map: strong vortex cores stay readable gray instead of
+    // saturating, which keeps the much weaker acoustic waves visible
+    float ink = 1.0 - exp(-g * 420.0);
+    col = PAPER - vec3(ink) * 0.92;
+  } else if (uMode == 0) {
     vec4 d = bilerp(uDye, pos, uSize);
     col = PAPER - d.rgb;
   } else if (uMode == 1) {

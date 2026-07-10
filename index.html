@@ -95,6 +95,15 @@
     background: color-mix(in srgb, var(--accent) 13%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 32%, transparent);
   }
+  /* Field seg carries 5 buttons ("Schlieren" is long) — tighten to fit 250px. */
+  .seg-field button { font-size: 10.5px; padding: 6px 0; letter-spacing: -0.01em; }
+
+  /* Active state for the sonification toggle (mirrors .seg button.on). */
+  .btns button.on {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
 
   /* sliders */
   input[type=range] {
@@ -222,11 +231,12 @@
 
     <div class="row">
       <label>Field</label>
-      <div class="seg">
+      <div class="seg seg-field">
         <button data-mode="0">Dye</button>
         <button data-mode="1">Vortex</button>
         <button data-mode="2">Speed</button>
         <button data-mode="3">Trace</button>
+        <button data-mode="4">Schlieren</button>
       </div>
     </div>
 
@@ -267,10 +277,15 @@
       <a href="3d/" id="to3d">3D ↗</a>
     </div>
 
+    <div class="btns">
+      <button id="sound">♪ Sing</button>
+    </div>
+
     <div class="keys">
-      <kbd>1</kbd>–<kbd>4</kbd> field &nbsp; <kbd>space</kbd> pause &nbsp; <kbd>r</kbd> reset<br>
+      <kbd>1</kbd>–<kbd>5</kbd> field &nbsp; <kbd>space</kbd> pause &nbsp; <kbd>r</kbd> reset<br>
       <kbd>shift</kbd>-drag draw &nbsp; right-drag erase &nbsp; <kbd>[</kbd> <kbd>]</kbd> brush<br>
-      <kbd>c</kbd> clear obstacles &nbsp; <kbd>h</kbd> hide ui
+      <kbd>c</kbd> clear obstacles &nbsp; <kbd>h</kbd> hide ui<br>
+      <kbd>m</kbd> sing &nbsp; <kbd>x</kbd> clap (schlieren: click to clap)
     </div>
   </div>
 </div>

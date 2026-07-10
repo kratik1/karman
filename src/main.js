@@ -3,13 +3,14 @@ import { LBM } from './lbm.js';
 import { Renderer, MODES } from './render.js';
 import { Particles } from './particles.js';
 import { PRESETS, stampDisk, SOLID } from './presets.js';
+import { Aeolian } from './aeolian.js';
 
 const canvas = document.getElementById('view');
 const gl = createGL(canvas);
 const quad = makeQuad(gl);
 
 // accent color per render mode — the UI chameleons to match the field
-const ACCENTS = ['#3b5bdb', '#e8590c', '#c2255c', '#0b7285'];
+const ACCENTS = ['#3b5bdb', '#e8590c', '#c2255c', '#0b7285', '#5f3dc4'];
 
 const settings = {
   quality: 288,        // sim grid height in cells
@@ -22,6 +23,63 @@ const settings = {
 };
 
 let sim, renderer, particles;
+const aeolian = new Aeolian();
+const FORCE_EVERY = 4; // reduce/read the force texture every Nth animation frame
+
+// Estimate shedding frequency + amplitude from the lift (Fy) ring buffer.
+// Frequency = mean-crossing rate of the de-meaned signal in wall-clock Hz;
+// amplitude = RMS of the de-meaned signal. One lift sample per force reduction
+// (every FORCE_EVERY frames), so cycles/sample * (fps/FORCE_EVERY) gives Hz.
+function estimateShedding() {
+  // scan only the most recent window so the pitch reacts within seconds and
+  // isn't diluted by stale ring-buffer content after resets
+  const buf = sim.liftHistory;
+  const N = 128;
+  const start = (sim._liftIdx - N + buf.length * 2) % buf.length;
+  const win = new Float32Array(N);
+  for (let i = 0; i < N; i++) win[i] = buf[(start + i) % buf.length];
+  const n = N;
+  let mean = 0;
+  for (let i = 0; i < n; i++) mean += win[i];
+  mean /= n;
+  let crossings = 0, sumSq = 0, prev = win[0] - mean;
+  for (let i = 0; i < n; i++) {
+    const v = win[i] - mean;
+    if ((v > 0) !== (prev > 0) && v !== 0) crossings++;
+    sumSq += v * v;
+    prev = v;
+  }
+  const rms = Math.sqrt(sumSq / n);
+  // Two crossings per cycle. Force is sampled every FORCE_EVERY frames, so the
+  // sample rate is fps/FORCE_EVERY; cycles/sample * sampleRate = Hz.
+  const cyclesPerSample = crossings / (2 * n);
+  const freqHz = cyclesPerSample * (fps / FORCE_EVERY);
+  return { freqHz, amp: rms };
+}
+
+// Signal handed to the synth: pitch/gain source, normalized so gain can't blow
+// out. norm = 0.5*rho*U^2*D (rho=1). Silent when paused or wind ~ 0.
+function aeolianSignal() {
+  if (settings.paused || sim.inVel < 0.005) return { silent: true };
+  const { freqHz, amp } = estimateShedding();
+  const D = sim.obstacleD || sim.h * 0.22;
+  const norm = 0.5 * sim.inVel * sim.inVel * D;
+  return { freqHz, amp, norm, silent: false };
+}
+
+// Characteristic length D = obstacle bounding-box height in cells, excluding
+// the two channel wall rows (y=0, y=NY-1). Cached on sim for Cd/Cl. 0 = none.
+function measureObstacle(sim) {
+  let yMin = Infinity, yMax = -Infinity;
+  for (let y = 1; y < sim.h - 1; y++) {
+    const row = y * sim.w;
+    for (let x = 0; x < sim.w; x++) {
+      if (sim.mask[row + x] === SOLID) { if (y < yMin) yMin = y; if (y > yMax) yMax = y; break; }
+    }
+  }
+  sim.obstacleD = yMax >= yMin ? (yMax - yMin + 1) : 0;
+  return sim.obstacleD;
+}
 
 function buildSim() {
   const aspect = Math.max(1, Math.min(3, canvas.clientWidth / canvas.clientHeight));
@@ -36,6 +94,7 @@ function buildSim() {
 
   sim.mask.set(PRESETS[settings.preset].build(w, h, { text: settings.text }));
   sim.uploadMask();
+  measureObstacle(sim);
   sim.reset();
   renderer.clearDye();
 }
@@ -45,6 +104,7 @@ function buildSim() {
 function restampMask() {
   sim.mask.set(PRESETS[settings.preset].build(sim.w, sim.h, { text: settings.text }));
   sim.uploadMask();
+  measureObstacle(sim);
 }
 
 function resizeCanvas() {
@@ -63,6 +123,8 @@ window.addEventListener('resize', () => {
 // ---------- pointer input ----------
 
 const pointer = { down: false, x: 0, y: 0, px: 0, py: 0, button: 0, shift: false };
+const lastCell = { x: 0, y: 0 };   // most recent pointer cell (for 'x' clap)
+let dragMoved = false;             // did the pointer drag since pressing down
 const ring = document.getElementById('ring');
 
 function toCell(e) {
@@ -84,6 +146,7 @@ function paint(x, y, erase) {
   // keep the channel walls intact
   for (let i = 0; i < sim.w; i++) { sim.mask[i] = SOLID; sim.mask[(sim.h - 1) * sim.w + i] = SOLID; }
   sim.uploadMask();
+  measureObstacle(sim);
 }
 
 function dyeColor(t) {
@@ -117,16 +180,19 @@ canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
   const c = toCell(e);
   Object.assign(pointer, { down: true, x: c.x, y: c.y, px: c.x, py: c.y, button: e.button, shift: e.shiftKey });
+  lastCell.x = c.x; lastCell.y = c.y;
+  dragMoved = false;
   if (activeTool() !== 'stir') paint(c.x, c.y, activeTool() === 'erase');
   updateRing(e);
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (sim) updateRing(e);
+  if (sim) { updateRing(e); const lc = toCell(e); lastCell.x = lc.x; lastCell.y = lc.y; }
   if (!pointer.down) return;
   const c = toCell(e);
   pointer.px = pointer.x; pointer.py = pointer.y;
   pointer.x = c.x; pointer.y = c.y;
   pointer.shift = e.shiftKey;
+  if (Math.hypot(c.x - pointer.px, c.y - pointer.py) > 0.5) dragMoved = true;
 
   const tool = activeTool();
   if (tool === 'stir') {
@@ -140,7 +206,17 @@ canvas.addEventListener('pointermove', (e) => {
   }
 });
 canvas.addEventListener('pointerleave', () => { ring.style.opacity = '0'; });
-window.addEventListener('pointerup', () => { pointer.down = false; });
+window.addEventListener('pointerup', () => {
+  // In schlieren mode, a plain click (stir tool, no drag) claps an acoustic pulse.
+  if (pointer.down && !dragMoved && renderer.mode === MODES.SCHLIEREN && activeTool() === 'stir') {
+    clap(pointer.x, pointer.y);
+  }
+  pointer.down = false;
+});
+
+function clap(x, y) {
+  if (sim) sim.clap = { x, y };
+}
 
 // ---------- UI ----------
 
@@ -205,6 +281,9 @@ function initUI() {
   $('reset').onclick = () => { sim.reset(); renderer.clearDye(); };
   $('clear').onclick = clearObstacles;
 
+  aeolian.attach(aeolianSignal);
+  $('sound').onclick = toggleSound;
+
   $('collapse').onclick = () => $('panel').classList.toggle('collapsed');
 
   setTimeout(dismissToast, 8000);
@@ -213,11 +292,18 @@ function initUI() {
 function clearObstacles() {
   sim.mask.set(PRESETS.sandbox.build(sim.w, sim.h));
   sim.uploadMask();
+  measureObstacle(sim);
 }
 
 function togglePause() {
   settings.paused = !settings.paused;
   $('pause').textContent = settings.paused ? 'Resume' : 'Pause';
+}
+
+// AudioContext must be created/resumed inside the click handler (autoplay).
+function toggleSound() {
+  const on = aeolian.toggle();
+  $('sound').classList.toggle('on', on);
 }
 
 window.addEventListener('keydown', (e) => {
@@ -227,6 +313,9 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === '2') setMode(MODES.VORTICITY);
   else if (e.key === '3') setMode(MODES.SPEED);
   else if (e.key === '4') setMode(MODES.TRACE);
+  else if (e.key === '5') setMode(MODES.SCHLIEREN);
+  else if (e.key === 'm') toggleSound();
+  else if (e.key === 'x') clap(lastCell.x, lastCell.y);
   else if (e.key === 'r') { sim.reset(); renderer.clearDye(); }
   else if (e.key === 's') setTool('stir');
   else if (e.key === 'd') setTool('draw');
@@ -243,17 +332,35 @@ const hud = $('hud');
 let frames = 0, lastHud = performance.now(), fps = 0;
 
 function updateHud() {
-  const D = sim.h * 0.22; // characteristic length ~ cylinder diameter
+  // Re uses the measured obstacle height when present (falls back to old est.).
+  const D = sim.obstacleD || sim.h * 0.22;
   const re = Math.round((sim.inVel * D) / sim.nu);
   const mlups = ((sim.w * sim.h * settings.substeps * fps) / 1e6).toFixed(0);
+
+  // Drag/lift coefficients from the momentum-exchange force (rho=1).
+  // Cd = 2*Fx/(rho*U^2*D), Cl = 2*Fy/(rho*U^2*D). "—" when no obstacle.
+  let coef;
+  if (sim.obstacleD > 0 && sim.inVel > 1e-4) {
+    const q = sim.inVel * sim.inVel * sim.obstacleD; // rho*U^2*D
+    const cd = (2 * sim.forceAvg.fx) / q;
+    const cl = (2 * sim.forceAvg.fy) / q;
+    coef = `C<sub>d</sub> <b>${cd.toFixed(2)}</b> <i>·</i> C<sub>l</sub> <b>${cl.toFixed(2)}</b>`;
+  } else {
+    coef = `C<sub>d</sub> <b>—</b> <i>·</i> C<sub>l</sub> <b>—</b>`;
+  }
+
   hud.innerHTML =
     `<b>${fps.toFixed(0)}</b> fps<i>·</i>${sim.w}×${sim.h}<i>·</i>` +
-    `<b>${mlups}</b> MLUPS<i>·</i>Re ≈ <b>${re}</b>`;
+    `<b>${mlups}</b> MLUPS<i>·</i>Re ≈ <b>${re}</b><i>·</i>${coef}`;
 }
+
+let forceFrame = 0;
 
 function frame(t) {
   if (!settings.paused) {
     sim.advance(settings.substeps);
+    // Reduce/read the force texture once every FORCE_EVERY frames (bound stalls).
+    if (forceFrame++ % FORCE_EVERY === 0) sim.sampleForce();
     renderer.advect(sim, settings.substeps);
     particles.step(sim, settings.substeps, t * 0.001);
   }
@@ -277,6 +384,9 @@ window.karman = {
     const t0 = performance.now();
     for (let i = 0; i < frames; i++) {
       sim.advance(settings.substeps);
+      // sample sparsely during warp: each sample is a GPU sync, and warp
+      // bursts thousands of frames
+      if (i % 16 === 0) sim.sampleForce();
       renderer.advect(sim, settings.substeps);
       particles.step(sim, settings.substeps, i * 0.016);
     }
@@ -285,6 +395,8 @@ window.karman = {
   },
   mode: (m) => setMode(m),
   get sim() { return sim; },
+  get aeolian() { return aeolian; },
+  get signal() { return aeolianSignal(); },
 };
 
 // Wait until the canvas actually has layout (size 0 at module-eval time in

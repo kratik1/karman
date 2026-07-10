@@ -3,7 +3,7 @@
 import { Pass, makeTexture, makeFBO, blitTo } from './gl.js';
 import { ADVECT_FS, DISPLAY_FS } from './shaders/render.glsl.js';
 
-export const MODES = { DYE: 0, VORTICITY: 1, SPEED: 2, TRACE: 3 };
+export const MODES = { DYE: 0, VORTICITY: 1, SPEED: 2, TRACE: 3, SCHLIEREN: 4 };
 
 export class Renderer {
   constructor(gl, quad, width, height) {
