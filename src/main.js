@@ -4,6 +4,9 @@ import { Renderer, MODES } from './render.js';
 import { Particles } from './particles.js';
 import { PRESETS, stampDisk, SOLID } from './presets.js';
 import { Aeolian } from './aeolian.js';
+import { createExperiment } from './experiment.js';
+import { createReport } from './report.js';
+import { createEvolve } from './evolve.js';
 
 const canvas = document.getElementById('view');
 const gl = createGL(canvas);
@@ -284,6 +287,28 @@ function initUI() {
   aeolian.attach(aeolianSignal);
   $('sound').onclick = toggleSound;
 
+  // wave-2: experiment sweep, report plate, shape evolution
+  $('experiment').onclick = () => {
+    if (experiment.running) experiment.stop();
+    else { experiment.start(); syncExpButton(); }
+    syncExpButton();
+  };
+  $('report').onclick = async () => {
+    const b = $('report');
+    const prev = b.textContent;
+    b.textContent = 'measuring…'; b.disabled = true;
+    // let the label paint before the synchronous measurement burst
+    setTimeout(async () => {
+      try { await report.run(false); }
+      finally { b.textContent = prev; b.disabled = false; }
+    }, 30);
+  };
+  $('evolve').onclick = () => {
+    if (evolve.running) evolve.stop();
+    else { experiment.chart.show(); evolve.start(); syncEvolveButton(); }
+    syncEvolveButton();
+  };
+
   $('collapse').onclick = () => $('panel').classList.toggle('collapsed');
 
   setTimeout(dismissToast, 8000);
@@ -377,26 +402,67 @@ function frame(t) {
   requestAnimationFrame(frame);
 }
 
+// Synchronous frame-warp shared by karman.warp and the wave-2 controllers.
+// Advances `frames` frames of `settings.substeps` lattice steps each. Force is
+// sampled sparsely here (each sample is a GPU sync); measurement routines that
+// need force call sim.sampleForce() themselves after their own bursts.
+function warpFrames(frames) {
+  for (let i = 0; i < frames; i++) {
+    sim.advance(settings.substeps);
+    if (i % 16 === 0) sim.sampleForce();
+    renderer.advect(sim, settings.substeps);
+    particles.step(sim, settings.substeps, warpFrames._t++ * 0.016);
+  }
+  renderer.draw(sim, particles.trailTex, canvas.width, canvas.height);
+}
+warpFrames._t = 0;
+
+// Deps handed to the wave-2 controllers. Accessors are live (buildSim swaps
+// sim/renderer), so controllers capture their sim at start and abort if the
+// getSim() reference changes underneath them.
+const wave2Deps = {
+  getSim: () => sim,
+  warp: warpFrames,
+  getSubsteps: () => settings.substeps,
+  getGLCanvas: () => canvas,
+  isCylinder: () => settings.preset === 'cylinder',
+  get presetLabel() { return PRESETS[settings.preset]?.label || settings.preset; },
+  get modeName() { return ['dye', 'vorticity', 'speed', 'trace', 'schlieren'][renderer.mode] || 'dye'; },
+};
+
+// extend via prototype, NOT spread: spreading would evaluate the live getters
+// now, before sim/renderer exist
+const experiment = createExperiment(Object.setPrototypeOf({ onDone: () => syncExpButton() }, wave2Deps));
+const report = createReport(wave2Deps);
+const evolve = createEvolve(Object.setPrototypeOf({
+  onStatus: (t) => experiment.chart.status(t),
+  onDone: () => syncEvolveButton(),
+}, wave2Deps));
+
+function syncExpButton() {
+  const b = $('experiment');
+  if (b) b.textContent = experiment.running ? 'Stop' : 'Experiment';
+}
+function syncEvolveButton() {
+  const b = $('evolve');
+  if (b) b.textContent = evolve.running ? 'Stop' : 'Evolve';
+}
+
 // Tiny console API — open devtools and play. karman.warp(600) fast-forwards
 // 600 frames synchronously (great for capturing a developed wake).
 window.karman = {
   warp(frames = 600) {
     const t0 = performance.now();
-    for (let i = 0; i < frames; i++) {
-      sim.advance(settings.substeps);
-      // sample sparsely during warp: each sample is a GPU sync, and warp
-      // bursts thousands of frames
-      if (i % 16 === 0) sim.sampleForce();
-      renderer.advect(sim, settings.substeps);
-      particles.step(sim, settings.substeps, i * 0.016);
-    }
-    renderer.draw(sim, particles.trailTex, canvas.width, canvas.height);
+    warpFrames(frames);
     return `${frames} frames in ${((performance.now() - t0) / 1000).toFixed(1)}s`;
   },
   mode: (m) => setMode(m),
   get sim() { return sim; },
   get aeolian() { return aeolian; },
   get signal() { return aeolianSignal(); },
+  experiment,
+  report: () => report.run(true),
+  evolve,
 };
 
 // Wait until the canvas actually has layout (size 0 at module-eval time in
